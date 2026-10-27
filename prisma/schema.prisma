@@ -1,0 +1,183 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum Role {
+  GUEST
+  HOST
+  ADMIN
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  REJECTED
+  CANCELLED
+}
+
+enum ListingStatus {
+  DRAFT
+  PUBLISHED
+  HIDDEN
+}
+
+model User {
+  id              String    @id @default(cuid())
+  email           String    @unique
+  passwordHash    String
+  name            String
+  role            Role      @default(GUEST)
+  emailVerifiedAt DateTime?
+  suspendedAt     DateTime?
+  createdAt       DateTime  @default(now())
+
+  listings     Listing[]
+  bookings     Booking[]
+  favorites    Favorite[]
+  verifyTokens EmailVerificationToken[]
+  resetTokens  PasswordResetToken[]
+  auditEvents  AuditEvent[]
+}
+
+model Listing {
+  id            String        @id @default(cuid())
+  hostId        String
+  host          User          @relation(fields: [hostId], references: [id], onDelete: Restrict)
+  title         String
+  description   String
+  houseRules    String        @default("")
+  propertyType  String
+  maxGuests     Int           @default(2)
+  pricePerNight Decimal       @db.Decimal(10, 2)
+  latitude      Float
+  longitude     Float
+  address       String
+  city          String
+  country       String
+  ecoScore      Int
+  energyRating  String
+  status        ListingStatus @default(PUBLISHED)
+  createdAt     DateTime      @default(now())
+
+  images    ListingImage[]
+  amenities ListingAmenity[]
+  bookings  Booking[]
+  favorites Favorite[]
+
+  @@index([latitude, longitude])
+  @@index([status, pricePerNight])
+  @@index([status, ecoScore])
+  @@index([hostId])
+}
+
+model ListingImage {
+  id        String  @id @default(cuid())
+  listingId String
+  listing   Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  url       String
+  alt       String  @default("")
+  position  Int     @default(0)
+
+  @@index([listingId, position])
+}
+
+model Amenity {
+  id       String           @id @default(cuid())
+  name     String           @unique
+  listings ListingAmenity[]
+}
+
+model ListingAmenity {
+  listingId String
+  amenityId String
+  listing   Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  amenity   Amenity @relation(fields: [amenityId], references: [id], onDelete: Cascade)
+
+  @@id([listingId, amenityId])
+}
+
+model Booking {
+  id         String        @id @default(cuid())
+  listingId  String
+  listing    Listing       @relation(fields: [listingId], references: [id], onDelete: Restrict)
+  guestId    String
+  guest      User          @relation(fields: [guestId], references: [id], onDelete: Restrict)
+  startDate  DateTime      @db.Date
+  endDate    DateTime      @db.Date
+  guests     Int           @default(1)
+  totalPrice Decimal       @db.Decimal(10, 2)
+  status     BookingStatus @default(PENDING)
+  createdAt  DateTime      @default(now())
+
+  review Review?
+
+  @@index([listingId, startDate, endDate])
+  @@index([guestId])
+}
+
+model Review {
+  id        String   @id @default(cuid())
+  bookingId String   @unique
+  booking   Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  rating    Int
+  comment   String
+  hidden    Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+model Favorite {
+  userId    String
+  listingId String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  listing   Listing  @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@id([userId, listingId])
+}
+
+model EmailVerificationToken {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String   @unique
+  expiresAt DateTime
+}
+
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+}
+
+model IdempotencyKey {
+  id        String   @id @default(cuid())
+  key       String
+  userId    String
+  bookingId String?
+  createdAt DateTime @default(now())
+
+  @@unique([userId, key])
+}
+
+model AuditEvent {
+  id        String   @id @default(cuid())
+  actorId   String?
+  actor     User?    @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  action    String
+  entity    String
+  entityId  String?
+  meta      Json?
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([actorId])
+}

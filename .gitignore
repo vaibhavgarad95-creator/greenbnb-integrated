@@ -1,0 +1,15 @@
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Dependencies and builds
+node_modules/
+.next/
+out/
+dist/
+
+# Logs
+npm-debug.log*
+*.tsbuildinfo
+*.backup
